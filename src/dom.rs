@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-pub type ArrtMap = HashMap<String, String>;
+pub type AttrMap = HashMap<String, String>;
 
 #[derive(Debug, PartialEq)]
 pub struct Node {
@@ -36,7 +36,7 @@ pub struct Text {
   pub data: String,
 }
 
-imple Text {
+impl Text {
   pub fn new(text: String) -> Box<Node> {
     Box::new(Node {
       node_type: NodeType::Text(Text { data: text}),
