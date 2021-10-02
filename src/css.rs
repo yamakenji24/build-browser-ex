@@ -6,6 +6,8 @@ use combine::{
   sep_by, sep_end_by, ParseError, Parser, Stream,
 };
 
+use crate::dom::{Node, NodeType, Element};
+
 /// `Stylesheet` represents a single stylesheet.
 /// It consists of multiple rules, which are called "rule-list" in the standard (https://www.w3.org/TR/css-syntax-3/).
 #[derive(Debug, PartialEq)]
@@ -24,6 +26,12 @@ impl Stylesheet {
 pub struct Rule {
   pub selectors: Vec<Selector>,
   pub declarations: Vec<Declaration>,
+}
+
+impl Rule {
+  pub fn matches(&self, n: &Box<Node>) -> bool {
+    self.selectors.iter().any(|s| s.matches(n))
+  }
 }
 
 /// NOTE: This is not compliant to the standard for simplicity.
@@ -52,6 +60,45 @@ pub enum SimpleSelector {
   },
   // TODO (enhancement): support multiple attribute selectors like `a[href=bar][ping=foo]`
   // TODO (enhancement): support more attribute selectors
+}
+
+impl SimpleSelector {
+  pub fn matches(&self, n: &Box<Node>) -> bool {
+    match self {
+      SimpleSelector::UniversalSelector => true,
+      SimpleSelector::TypeSelector { tag_name } => match n.node_type {
+        NodeType::Element(ref e) => e.tag_name.as_str() == tag_name,
+        _ => false,
+      },
+      SimpleSelector::AttributeSelector {
+        tag_name,
+        op,
+        attribute,
+        value,
+      } => match n.node_type {
+        NodeType::Element(ref e) => {
+          e.tag_name.as_str() == tag_name && match op {
+            AttributeSelectorOp::Eq => e.attributes.get(attribute) == Some(value),
+            AttributeSelectorOp::Contain => e
+              .attributes
+              .get(attribute)
+              .map(|value| {
+                value
+                  .split_ascii_whitespace()
+                  .find(|v| v == value)
+                  .is_some()
+              })
+              .unwrap_or(false),
+          }
+        }
+        _ => false,
+      },
+      SimpleSelector::ClassSelector { class_name } => match n.node_type {
+        NodeType::Element(ref e) => e.attributes.get("class") == Some(class_name),
+        _ => false,
+      },
+    }
+  }
 }
 
 /// `AttributeSelectorOp` is an operator which is allowed to use.
@@ -445,5 +492,137 @@ mod tests {
       );
 
       assert!(declaration().parse("aaaaa").is_err())
+  }
+
+  #[test]
+  fn test_universal_selector_behaviour() {
+    let e = &Element::new(
+      "p".to_string(),
+        [
+          ("id".to_string(), "test".to_string()),
+          ("class".to_string(), "testclass".to_string()),
+        ]
+      .iter()
+      .cloned()
+      .collect(),
+      vec![],
+    );
+    assert_eq!(
+      SimpleSelector::UniversalSelector.matches(e), true);
+  }
+  
+  #[test]
+  fn test_type_selector_behaviour() {
+    let e = &Element::new(
+      "p".to_string(),
+      [("id".to_string(), "test".to_string()),
+      ("class".to_string(), "testclass".to_string())]
+        .iter()
+        .cloned()
+        .collect(),
+      vec![],
+    );
+
+    assert_eq!(
+      (SimpleSelector::TypeSelector {
+        tag_name: "p".into(),
+      })
+      .matches(e),
+      true
+    );
+
+    assert_eq!(
+      (SimpleSelector::TypeSelector {
+        tag_name:"invalid".into(),
+      })
+      .matches(e),
+      false
+    );
+  }
+
+  #[test]
+  fn test_attribute_selector_behaviour() {
+    let e = &Element::new(
+      "p".to_string(),
+      [("id".to_string(), "test".to_string()),
+      ("class".to_string(), "testclass".to_string())]
+        .iter()
+        .cloned()
+        .collect(),
+      vec![],
+    );
+
+    assert_eq!(
+      (SimpleSelector::AttributeSelector {
+        tag_name: "p".into(),
+        attribute: "id".into(),
+        value: "test".into(),
+        op: AttributeSelectorOp::Eq,
+      })
+      .matches(e),
+      true
+    );
+
+    assert_eq!(
+      (SimpleSelector::AttributeSelector {
+        tag_name: "p".into(),
+        attribute: "id".into(),
+        value: "invalid".into(),
+        op: AttributeSelectorOp::Eq,
+      })
+      .matches(e),
+      false
+    );
+
+    assert_eq!(
+      (SimpleSelector::AttributeSelector {
+        tag_name: "p".into(),
+        attribute: "valid".into(),
+        value: "test".into(),
+        op: AttributeSelectorOp::Eq,
+      })
+      .matches(e),
+      false
+    );
+
+    assert_eq!(
+      (SimpleSelector::AttributeSelector {
+        tag_name: "invalid".into(),
+        attribute: "id".into(),
+        value: "test".into(),
+        op: AttributeSelectorOp::Eq,
+      })
+      .matches(e),
+      false
+    );
+  }
+
+  #[test]
+  fn test_class_selector_behavior() {
+    let e = &Element::new(
+      "p".to_string(),
+      [("id".to_string(), "test".to_string()),
+      ("class".to_string(), "testclass".to_string())]
+        .iter()
+        .cloned()
+        .collect(),
+      vec![],
+    );
+
+    assert_eq!(
+      (SimpleSelector::ClassSelector {
+        class_name: "testclass".into(),
+      })
+      .matches(e),
+      true
+    );
+
+    assert_eq!(
+      (SimpleSelector::ClassSelector {
+        class_name: "invalid".into(),
+      })
+      .matches(e),
+      false
+    );
   }
 }
