@@ -7,37 +7,31 @@ use build_browser::{
     style::to_styled_node,
 };
 
-const HTML: &str = r#"<body>
-  <p>hello</p>
-  <p class="inline">world</p>
-  <p class="inline">:)</p>
-  <div class="none"><p>this should not be shown</p></div>
-  <style>
-    .none {
-      display: none;
-    }
-    .inline {
-      display: inline;
-    }
-  </style>
-</body>"#;
-
-const DEFAULT_STYLESHEET: &str = r#"
-script, style {
-    display: none;
-}
-p, div {
-    display: block;
-}
-"#;
+use std::env;
+use std::fs::File;
+use std::io::prelude::*;
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+    let filename = &args[1];
+    let css_filename = &args[2];
+
+    let mut f = File::open(filename).expect("file not found");
+    let mut html_contents = String::new();
+    f.read_to_string(&mut html_contents)
+        .expect("something went wrong reading the file");
+
+    let mut f_css = File::open(css_filename).expect("file not found");
+    let mut css_contents = String::new();
+    f_css.read_to_string(&mut css_contents)
+        .expect("something went wrong reading the file");
+    
     let mut siv = cursive::default();
 
-    let node = html::parse(HTML);
+    let node = html::parse(&html_contents);
     let stylesheet = css::parse(format!(
         "{}\n{}",
-        DEFAULT_STYLESHEET,
+        &css_contents,
         collect_tag_inners(&node, "style".into()).join("\n")
     ));
 

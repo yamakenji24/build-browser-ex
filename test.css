@@ -1,0 +1,6 @@
+script, style {
+  display: none;
+}
+p, div {
+  display: block;
+}
